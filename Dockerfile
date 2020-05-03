@@ -1,6 +1,6 @@
 FROM digitalsleuth/remnux-build:latest
 
-LABEL version="1.11"
+LABEL version="1.12"
 LABEL description="REMnux Docker based on Ubuntu 18.04 LTS"
 LABEL maintainer="https://github.com/digitalsleuth/remnux-docker"
 
@@ -42,7 +42,8 @@ git clone --depth 1 https://github.com/digitalsleuth/inlineegg /tmp/inlineegg &&
 git clone --depth 1 https://github.com/CyberShadow/RABCDASm.git /tmp/RABCDASm && \
 git clone --depth 1 https://github.com/kevthehermit/RATDecoders /tmp/RATDecoders && \
 git clone --depth 1 https://github.com/digitalsleuth/color_ssh_terminal /tmp/colorssh && \
-git clone --depth 1 https://github.com/HynekPetrak/malware-jail.git /tmp/malware-jail
+git clone --depth 1 https://github.com/HynekPetrak/malware-jail.git /tmp/malware-jail && \
+git clone --depth 1 https://github.com/svent/jsdetox.git /usr/local/src/jsdetox
 
 #gdtoa-desktop
 RUN cd /tmp/gdtoa-desktop && \
@@ -157,15 +158,10 @@ ln -s /usr/share/automater/Automater.py /usr/local/bin/automater.py && chmod +x 
 cd /tmp/bashacks && make && mkdir /usr/share/bashacks && mv bashacks.sh /usr/share/bashacks/ && \
 cd /tmp && rm -rf bashacks && \
 \
-#BUILD CUTTER vice DOWNLOAD
-#RUN apt-get -qq install -y libzip-dev zlib1g-dev && pip3 install meson && ln -s /usr/local/bin/meson /usr/bin/meson && cd /tmp && \
-#git clone --recurse-submodules https://github.com/radareorg/cutter && cd cutter && \
-#mkdir build && cd build && cmake -DCUTTER_USE_BUNDLED_RADARE2=ON -DCMAKE_EXE_LINKER_FLAGS="-Wl,--disable-new-dtags" ../src && cmake --build .
-\
 #CUTTER
 wget -q https://github.com/radareorg/cutter/releases/download/v1.10.1/Cutter-v1.10.1-x64.Linux.AppImage -O /tmp/cutter && \
 chmod +x /tmp/cutter && cd /tmp && ./cutter --appimage-extract && mv squashfs-root /usr/share/cutter && \
-ln -s /usr/share/cutter/AppRun /usr/local/bin/cutter && chmod +x /usr/share/cutter/AppRun && rm /tmp/cutter && \
+ln -s /usr/share/cutter/AppRun /usr/local/bin/cutter && chmod -R 755 /usr/share/cutter/ && rm /tmp/cutter && \
 \
 #ByteHist
 wget -q https://www.cert.at/media/files/downloads/software/bytehist/files/bytehist_1_0_102_linux.zip -O /tmp/bytehist.zip && \
@@ -213,7 +209,9 @@ cd /tmp && rm -rf ioc_writer
 
 #JD-GUI - requires xdg-utils
 RUN wget -q https://github.com/java-decompiler/jd-gui/releases/download/v1.6.6/jd-gui-1.6.6.deb -O /tmp/jdgui.deb && \
-dpkg -i /tmp/jdgui.deb && rm /tmp/jdgui.deb && mv /opt/jd-gui /usr/share/ && \
+dpkg -i /tmp/jdgui.deb && rm /tmp/jdgui.deb && \
+echo '#!/bin/bash' > /usr/local/bin/jd-gui && echo 'java -jar /opt/jd-gui/jd-gui.jar ${*}' >> /usr/local/bin/jd-gui && \
+chmod 755 /usr/local/bin/jd-gui && \
 \
 #LIBDasm
 cd /tmp/libdasm && make && make install && \
@@ -297,13 +295,17 @@ cd /tmp && rm -rf RATDecoders && \
 cd /tmp/malware-jail && npm install && npm audit fix --force && npm install && cd malware && rm -rf * && \
 cd /tmp && mv malware-jail /usr/share && \
 \
+#JSDetox
+cd /usr/local/src/jsdetox && sed "s/, '0.9.8'/, '0.12.3'/g" -i Gemfile && bundle install && \
+export PATH=$PATH:/usr/local/src/jsdetox && chmod 755 /usr/local/src/jsdetox && chown root:root /usr/local/src/jsdetox && \
+\
 apt-get autoremove -y && apt-get purge && apt-get clean
 
 RUN echo "On the Options - Preferences - Directories tab of edb, change Plugin Directory to /usr/local/lib/edb to fix the Debugger Core Error" > /home/remnux/EDB_ERROR_FIX.txt && \
 cd /tmp/colorssh && cat color_ssh_terminal >> /home/remnux/.bashrc && cd /tmp && rm -rf colorssh && \
 echo "[[ -e /usr/share/bashacks/bashacks.sh ]] && source /usr/share/bashacks/bashacks.sh" >> /home/remnux/.bash_profile && \
 echo alias cfr=\'java -jar /usr/local/bin/cfr.jar\' >> /home/remnux/.bashrc && \
-echo alias jd-gui=\'java -jar /usr/share/jd-gui/jd-gui.jar\' >> /home/remnux/.bashrc && \
+#echo alias jd-gui=\'java -jar /usr/share/jd-gui/jd-gui.jar\' >> /home/remnux/.bashrc && \
 echo alias networkminer=\'mono /opt/NetworkMiner*/NetworkMiner.exe --noupdatecheck\' >> /home/remnux/.bashrc && \
 echo alias portex=\'java -jar /usr/share/portex/PortexAnalyzer.jar\' >> /home/remnux/.bashrc && \
 echo alias maldet=\'java -jar /usr/share/portex/maldet.jar\' >> /home/remnux/.bashrc && \
@@ -311,5 +313,7 @@ echo alias jailme=\'cd /usr/share/malware-jail \&\& node jailme.js\' >> /home/re
 echo source .bashrc >> /home/remnux/.bash_profile && \
 chown remnux:remnux /home/remnux/.bashrc
 
+#default port for jsdetox is 3000, so we'll expose
+EXPOSE 3000
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
